@@ -8,9 +8,13 @@ resource "aws_route53_zone" "private" {
 resource "aws_route53_record" "ably-global" {
   zone_id = aws_route53_zone.private.zone_id
   name    = var.dns_global_record
-  type    = "CNAME"
-  ttl     = var.dns_global_record_ttl
-  records = [var.ably_vpc_endpoint_dns_entry]
+  type    = "A"
+  
+  alias {
+    name                   = var.vpc_endpoint_dns_name
+    zone_id                = var.vpc_endpoint_dns_name
+    evaluate_target_health = true
+  }
 }
 
 resource "aws_route53_record" "ably-regional" {
