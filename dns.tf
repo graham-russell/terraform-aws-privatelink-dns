@@ -11,7 +11,7 @@ resource "aws_route53_record" "ably-global" {
   type    = "A"
   
   alias {
-    name                   = var.vpc_endpoint_dns_name
+    name                   = var.ably_vpc_endpoint_dns_entry
     zone_id                = var.ably_vpc_endpoint_dns_hosted_zone_id
     evaluate_target_health = true
   }
