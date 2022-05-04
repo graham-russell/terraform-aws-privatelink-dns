@@ -1,10 +1,33 @@
-# Ably Privatelink DNS
-
+# Ably Privatelink DNS  
 Use this module to configure custom AWS Route53 DNS Records for using Ably over AWS PrivateLink.
-
-**NOTE:** You need an active Ably account and will need to engage with Ably's Partner & SRE teams to make use of this module. It will also require discussions about TLS certificates.
+\*\*NOTE:\*\* You need an active Ably account and will need to engage with Ably's Partner & SRE teams to make use of this module. It will also require discussions about TLS certificates.
 
 For PrivateLink documentation, see [AWS PrivateLink](https://aws.amazon.com/privatelink)
+
+## Pre-requisites
+
+Before you can use this module, you will need to go through some setup with your Ably account manager. This includes providing the IDs of the AWS accounts you expect to make PrivateLink connections from, and agreeing which AWS regions and availability zones you will ll be connecting from. Once you have completed that setup, you will then need to create Ably VPC Endpoints. Follow instructions [Here](https://github.com/ably/terraform-aws-privatelink). In addition to the VPC Endpoints, you will also need to create a Route53 Private Hosted zone so that this module can create DNS records for you.  
+The example folder includes a starting example for reference.
+
+## Infrastructure created by this module
+
+This module will provision the following infrastructure:
+
+- Route53 Apex DNS Record for your chosen subdomain. Type = Alias with Latency Routing policy for the relevant AWS region. E.G. subdomain.example.com (With Latency Record for relevant AWS Region)
+- Route53 DNS record for regional DNS. Type = CNAME and points your regions VPC endpoint DNS record. E.G. eu-west-1.subdomain.example.com
+- Route53 DNS record for zonal DNS. Type = CNAME and points at your AWS Region's VPC endpoint for AWS Availability Zone. E.G. eu-west-1a.subdomain.example.com
+
+## Verifying that your DNS records and VPC Endpoint are responding to requests
+
+Once you have successfully applied the module, you can verify that the DNS Records & VPC endpoint are working correctly by running the following curl command from within your VPC.
+
+```bash
+dig +short {Your DNS Record} # This should return DNS record information
+curl -Iv http://{Your DNS Record}/health. # This will test your Ably VPC Endpoint Connection.
+```  
+You should receive an HTTP 200 status code with the body of the response containing the phrase 'Ably Up'.
+
+Documentation on troubleshooting AWS Interface VPC endpoints can be found here - [Troubleshooting Interface VPC Endpoints](https://aws.amazon.com/premiumsupport/knowledge-center/connect-endpoint-service-vpc/).
 
 ## Usage
 
@@ -25,32 +48,47 @@ module "ably_privatelink" {
   egress_allowed_ipv6_cidr        = ["::/0"]
 }
 
+resource "aws_route53_zone" "private" {
+  name = "example.com"
+  vpc {
+    vpc_id = "Your VPC ID"
+  }
+}
+
 module "ably_privatelink_dns" {
   source                               = "ably/terraform-aws-privatelink-dns"
-  version                              = "0.1.0"
-  vpc_id                               = "vpc_id"
-  ably_vpc_endpoint_dns_entry          = module.ably_privatelink.vpc_endpoint_dns_name
-  ably_vpc_endpoint_dns_hosted_zone_id = module.ably_privatelink.vpc_endpoint_dns_hosted_zone_id
+  version                              = "0.1.4"
+  for_each                             = var.region_config
+  route53_private_zone_id              = aws_route53_zone.private.id
+  ably_vpc_endpoint_dns_entry          = module.ably_privatelink[each.key].vpc_endpoint_dns_name
+  ably_vpc_endpoint_dns_hosted_zone_id = module.ably_privatelink[each.key].vpc_endpoint_dns_hosted_zone_id
   dns_global_record                    = "example.com"
-  dns_regional_record                  = "eu-west-1.example.com"
-  dns_zonal_config                     = var.vpc_config[var.aws_region]["zonal_config"]
+  regions                              = [each.key]
+  azs                                  = toset(each.value)
+  depends_on = [
+    module.ably_privatelink
+  ]
 }
 ```
 
-Zonal config variable referenced above should be of type map(map(string))
+ Variables referenced above should be of type map(map(string))  
 Example
 ```terraform
-zonal_config = {
-        eu-west-1a = {
-          zonal_record = "eu-west-1a.example.com",
-        }
-        eu-west-1b = {
-          zonal_record = "eu-west-1b.example.com"
-        }
-        eu-west-1c = {
-          zonal_record = "eu-west-1c.example.com"
-        }
-      }
+variable "ably_vpc_service_endpoint_name" {
+  description = "Map containing Ably VPC Endpoint Services"
+  type        = map(string)
+  default = {
+    eu-west-1 = "com.amazonaws.vpce.eu-west-1.vpce-svc-XXXXX"
+  }
+}
+
+variable "region_config" {
+  type        = map(list(string))
+  description = "Map(list) of regional information use for the privatelink dns module"
+  default = {
+    eu-west-1 = ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
+  }
+}
 ```
 
 ## Requirements
@@ -71,20 +109,15 @@ zonal_config = {
 |------|-------------|------|---------|:--------:|
 | ably\_vpc\_endpoint\_dns\_entry | The top level DNS entry exposed by your VPC Endpoint (Non-AZ version) | `string` | n/a | yes |
 | ably\_vpc\_endpoint\_dns\_hosted\_zone\_id | Hosted Zone ID for your VPC Endpoint | `string` | n/a | yes |
+| azs | A list of AWS Availability Zones that you have created VPC endpoints in. Used to create zonal DNS entries for PrivateLink Connections. e.g. eu-west-1a.example.com and eu-west-1b.example.com | `list(string)` | n/a | yes |
 | dns\_global\_record | The global DNS CNAME record that you wish to use in a Private DNS Hosted Zone. This should be discussed with Ably. | `string` | n/a | yes |
 | dns\_global\_record\_ttl | TTL Value in seconds for the global DNS CNAME record that you wish to use in a Private DNS Hosted Zone. | `string` | `60` | no |
-| dns\_regional\_record | The regional DNS CNAME record that you wish to use in a Private DNS Hosted Zone. This should be discussed with Ably. | `string` | n/a | yes |
 | dns\_regional\_record\_ttl | TTL Value in seconds for the regional DNS CNAME record that you wish to use in a Private DNS Hosted Zone. | `string` | `60` | no |
-| dns\_zonal\_config | Map containing AWS availability zone and relevant DNS records to use for each AZ. | `map(map(string))` | n/a | yes |
 | dns\_zonal\_record\_ttl | TTL Value in seconds for the zonal DNS CNAME record that you wish to use in a Private DNS Hosted Zone. | `string` | `60` | no |
-| vpc\_id | The ID of your VPC | `string` | n/a | yes |
+| regions | AWS regions to use with PrivateLink. Used to create a regional DNS entry for PrivateLink Connections. E.G. eu-west-1.example.com | `list(any)` | n/a | yes |
+| route53\_private\_zone\_id | ID of Route53 Private Hosted Zone to use | `string` | n/a | yes |
 
 ## Outputs
 
-| Name | Description |
-|------|-------------|
-| custom\_ably\_global\_record | ID of the global DNS record |
-| custom\_ably\_regional\_record | ID of the regional DNS record |
-| custom\_ably\_zonal\_records | List of IDs for zonal DNS records |
-| phz\_zone\_id | ID of the Route53 Private DNS Zone |
+No output.
 

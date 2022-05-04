@@ -1,5 +1,5 @@
-variable "vpc_id" {
-  description = "The ID of your VPC"
+variable "route53_private_zone_id" {
+  description = "ID of Route53 Private Hosted Zone to use"
   type        = string
 }
 
@@ -24,21 +24,20 @@ variable "dns_global_record_ttl" {
   default     = 60
 }
 
+variable "regions" {
+  type        = list(any)
+  description = "AWS regions to use with PrivateLink. Used to create a regional DNS entry for PrivateLink Connections. E.G. eu-west-1.example.com"
+}
 
-variable "dns_regional_record" {
-  description = "The regional DNS CNAME record that you wish to use in a Private DNS Hosted Zone. This should be discussed with Ably."
-  type        = string
+variable "azs" {
+  type        = list(string)
+  description = "A list of AWS Availability Zones that you have created VPC endpoints in. Used to create zonal DNS entries for PrivateLink Connections. e.g. eu-west-1a.example.com and eu-west-1b.example.com"
 }
 
 variable "dns_regional_record_ttl" {
   description = "TTL Value in seconds for the regional DNS CNAME record that you wish to use in a Private DNS Hosted Zone."
   type        = string
   default     = 60
-}
-
-variable "dns_zonal_config" {
-  description = "Map containing AWS availability zone and relevant DNS records to use for each AZ."
-  type        = map(map(string))
 }
 
 variable "dns_zonal_record_ttl" {
