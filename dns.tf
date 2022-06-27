@@ -35,3 +35,23 @@ resource "aws_route53_record" "ably-zonal" {
   ttl      = var.dns_zonal_record_ttl
   records  = [replace(var.ably_vpc_endpoint_dns_entry, "/^([\\w-]+).(.*)$/", "$1-${each.key}.$2")]
 }
+
+resource "aws_cloudwatch_metric_alarm" "privatelink_disabled_status" {
+  alarm_name          = "ably-privatelink-region-status"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "Health"
+  namespace           = "Ably/VPCEndpoint"
+  period              = "60"
+  statistic           = "Maximum"
+  threshold           = "1"
+  alarm_description   = "This metric indicates whether an Ably region has been disabled by the Ably Incident Response team"
+}
+
+resource "aws_route53_health_check" "privatelink_disabled_status" {
+  for_each = toset(var.azs)
+  type                            = "CLOUDWATCH_METRIC"
+  cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.privatelink_disabled_status.alarm_name
+  cloudwatch_alarm_region         = each.key
+  insufficient_data_health_status = "Healthy"
+}
