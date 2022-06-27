@@ -37,7 +37,8 @@ resource "aws_route53_record" "ably-zonal" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "privatelink_disabled_status" {
-  alarm_name          = "ably-privatelink-region-status"
+  for_each = toset(var.regions)
+  alarm_name          = "ably-privatelink-region-status-${each.key}"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = "1"
   metric_name         = "Health"
