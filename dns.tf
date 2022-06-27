@@ -49,7 +49,7 @@ resource "aws_cloudwatch_metric_alarm" "privatelink_disabled_status" {
 }
 
 resource "aws_route53_health_check" "privatelink_disabled_status" {
-  for_each = toset(var.azs)
+  for_each = toset(var.regions)
   type                            = "CLOUDWATCH_METRIC"
   cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.privatelink_disabled_status.alarm_name
   cloudwatch_alarm_region         = each.key
